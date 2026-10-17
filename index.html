@@ -1,0 +1,97 @@
+javascript:(function(){
+    // Prevent creating multiple menus
+    if (document.getElementById('rickroll-menu')) return;
+
+    // Create the main menu container
+    const menu = document.createElement('div');
+    menu.id = 'rickroll-menu';
+    menu.style.position = 'fixed';
+    menu.style.top = '100px';
+    menu.style.left = '100px';
+    menu.style.width = '320px';
+    menu.style.backgroundColor = '#1a1a1a';
+    menu.style.color = '#ffffff';
+    menu.style.border = '2px solid #ff0055';
+    menu.style.borderRadius = '10px';
+    menu.style.boxShadow = '0 10px 25px rgba(0,0,0,0.5)';
+    menu.style.zIndex = '999999';
+    menu.style.fontFamily = 'Arial, sans-serif';
+    menu.style.overflow = 'hidden';
+
+    // Create a header bar for dragging
+    const header = document.createElement('div');
+    header.style.padding = '10px';
+    header.style.background = '#ff0055';
+    header.style.cursor = 'move';
+    header.style.fontWeight = 'bold';
+    header.style.display = 'flex';
+    header.style.justifyContent = 'space-between';
+    header.style.alignItems = 'center';
+    header.innerHTML = '<span>🕺 Rickroll Menu</span>';
+
+    // Create a close button
+    const closeBtn = document.createElement('button');
+    closeBtn.innerText = '✕';
+    closeBtn.style.background = 'none';
+    closeBtn.style.border = 'none';
+    closeBtn.style.color = 'white';
+    closeBtn.style.cursor = 'pointer';
+    closeBtn.style.fontSize = '14px';
+    closeBtn.onclick = function() { menu.remove(); };
+    header.appendChild(closeBtn);
+    menu.appendChild(header);
+
+    // Create the content area
+    const content = document.createElement('div');
+    content.style.padding = '15px';
+    content.style.textAlign = 'center';
+
+    // Add the Rick Roll Video (YouTube Embed with Autoplay)
+    const videoContainer = document.createElement('div');
+    videoContainer.style.position = 'relative';
+    videoContainer.style.paddingBottom = '56.25%';
+    videoContainer.style.height = '0';
+    videoContainer.style.borderRadius = '4px';
+    videoContainer.style.overflow = 'hidden';
+    
+    // Using standard YouTube embed with autoplay enabled
+    videoContainer.innerHTML = '<iframe src="https://youtube.com" style="position:absolute;top:0;left:0;width:100%;height:100%;" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>';
+    
+    content.appendChild(videoContainer);
+
+    // Add a fun caption
+    const text = document.createElement('p');
+    text.innerText = 'You got Rick-rolled!';
+    text.style.marginTop = '10px';
+    text.style.fontSize = '16px';
+    text.style.color = '#ff0055';
+    text.style.fontWeight = 'bold';
+    content.appendChild(text);
+
+    menu.appendChild(content);
+    document.body.appendChild(menu);
+
+    // Make the menu draggable
+    let isDragging = false;
+    let offsetX, offsetY;
+
+    header.onmousedown = function(e) {
+        isDragging = true;
+        offsetX = e.clientX - menu.getBoundingClientRect().left;
+        offsetY = e.clientY - menu.getBoundingClientRect().top;
+        document.addEventListener('mousemove', mouseMoveHandler);
+        document.addEventListener('mouseup', mouseUpHandler);
+    };
+
+    function mouseMoveHandler(e) {
+        if (!isDragging) return;
+        menu.style.left = (e.clientX - offsetX) + 'px';
+        menu.style.top = (e.clientY - offsetY) + 'px';
+    }
+
+    function mouseUpHandler() {
+        isDragging = false;
+        document.removeEventListener('mousemove', mouseMoveHandler);
+        document.removeEventListener('mouseup', mouseUpHandler);
+    }
+})();
