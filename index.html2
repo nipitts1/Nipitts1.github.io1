@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Interactive Throwable & Stretchable Blob</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background: linear-gradient(135deg, #ffeef8, #eef3ff);
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            overflow: hidden;
+            font-family: system-ui, -apple-system, sans-serif;
+            user-select: none;
+            touch-action: none;
+        }
+
+        h1 {
+            color: #4a5568;
+            font-size: 1.5rem;
+            margin-bottom: 5px;
+            text-align: center;
+        }
+
+        p {
+            color: #718096;
+            margin: 0 0 20px 0;
+            font-size: 0.9rem;
+            text-align: center;
+            max-width: 80%;
+        }
+
+        .arena {
+            position: relative;
+            width: 90vw;
+            height: 65vh;
+            background: rgba(255, 255, 255, 0.4);
+            border: 2px dashed rgba(74, 85, 104, 0.2);
+            border-radius: 24px;
+            box-shadow: inset 0 4px 12px rgba(0,0,0,0.02);
+        }
+
+        .character {
+            width: 120px;
+            height: 120px;
+            background: #ff5e97;
+            border-radius: 50%;
+            box-shadow: inset -8px -8px 0px rgba(0,0,0,0.15), 0 8px 16px rgba(0,0,0,0.1);
+            position: absolute;
+            cursor: grab;
+            transform-origin: center center;
+            transition: background 0.2s ease;
+            will-change: transform, left, top;
+        }
+
+        .character:active {
+            cursor: grabbing;
+        }
+
+        .face {
+            position: absolute;
+            top: 35px;
+            left: 20px;
+            width: 80px;
+            height: 35px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            transform-origin: center center;
+            will-change: transform;
+        }
+
+        .eye {
+            width: 20px;
+            height: 20px;
+            background: white;
+            border-radius: 50%;
+            position: relative;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .pupil {
+            width: 9px;
+            height: 9px;
+            background: #1a202c;
+            border-radius: 50%;
+            position: absolute;
+        }
+
+        .blush {
+            position: absolute;
+            width: 12px;
+            height: 6px;
+            background: rgba(255, 255, 255, 0.4);
+            border-radius: 50%;
+            bottom: -4px;
+        }
+        .left-blush { left: 1px; }
+        .right-blush { right: 1px; }
+
+        .mouth {
+            width: 18px;
+            height: 9px;
+            border-bottom: 3.5px solid #1a202c;
+            border-radius: 0 0 14px 14px;
+            position: absolute;
+            left: 31px;
+            top: 16px;
+            transition: border-radius 0.1s, border-top 0.1s, border-bottom 0.1s, height 0.1s;
+        }
+
+        .character.dizzy .pupil {
+            border-radius: 0;
+            width: 10px;
+            height: 2px;
+            transform: rotate(45deg) !important;
+        }
+        .character.dizzy .pupil::before {
+            content: '';
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            background: #1a202c;
+            transform: rotate(90deg);
+        }
+
+        .character.angry .eye { overflow: hidden; }
+        .character.angry .eye::before {
+            content: '';
+            position: absolute;
+            top: -4px;
+            width: 120%;
+            height: 8px;
+            background: #1a202c;
+        }
+        .character.angry .eye:nth-child(1)::before { transform: rotate(15deg); }
+        .character.angry .eye:nth-child(3)::before { transform: rotate(-15deg); }
+        .character.angry .mouth {
+            width: 16px;
+            height: 8px;
+            border-bottom: none;
+            border-top: 3.5px solid #1a202c;
+            border-radius: 12px 12px 0 0;
+            top: 22px;
+        }
+
+        .character.distorted .mouth {
+            width: 14px;
+            height: 14px;
+            border: 3.5px solid #1a202c;
+            border-radius: 50%;
+            top: 14px;
+            left: 33px;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>Throwable & Stretchable Blob</h1>
+    <p>Fling him with 1 finger! Use <b>2 fingers</b> together to pull, stretch, and skew his face out of shape.</p>
+
+    <div class="arena" id="arena">
+        <div class="character" id="blob">
+            <div class="face" id="face">
+                <div class="eye">
+                    <div class="pupil"></div>
+                    <div class="blush left-blush"></div>
+                </div>
+                <div class="mouth"></div>
+                <div class="eye">
+                    <div class="pupil"></div>
+                    <div class="blush right-blush"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const arena = document.getElementById('arena');
+        const blob = document.getElementById('blob');
+        const face = document.getElementById('face');
+        const pupils = document.querySelectorAll('.pupil');
+
+        const gravity = 0.4;
+        const bounce = 0.65;
+        const friction = 0.985;
+        const angerDecay = 0.01;
+
+        let posX = 100, posY = 100;
+        let velX = 0, velY = 0;
+        let lastMouseX = 0, lastMouseY = 0;
+        let angerLevel = 0;
+
+        const activePointers = new Map();
+        let isDragging = false;
+        let isStretching = false;
+        let initialTouchDistance = 0;
+
+        let arenaRect = arena.getBoundingClientRect();
+        const blobSize = 120;
+
+        window.addEventListener('resize', () => { arenaRect = arena.getBoundingClientRect(); });
+
+        blob.style.left = `${posX}px`;
+        blob.style.top = `${posY}px`;
+
+        blob.addEventListener('pointerdown', (e) => {
+            blob.setPointerCapture(e.pointerId);
+            activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+            
+            if (activePointers.size === 1) {
+                isDragging = true;
+                isStretching = false;
+                angerLevel = 0;
+                
+                const localX = e.clientX - arenaRect.left - blobSize / 2;
+                const localY = e.clientY - arenaRect.top - blobSize / 2;
+                lastMouseX = localX;
+                lastMouseY = localY;
+                velX = 0; velY = 0;
+            } else if (activePointers.size === 2) {
+                isDragging = false;
+                isStretching = true;
+                blob.classList.add('distorted', 'dizzy');
+                
+                const points = Array.from(activePointers.values());
+                initialTouchDistance = Math.hypot(points[0].x - points[1].x, points[0].y - points[1].y) || 1;
+            }
+        });
+
+        window.addEventListener('pointermove', (e) => {
+            if (!activePointers.has(e.pointerId)) {
+                const centerVecX = (arenaRect.width / 2) - (posX + blobSize / 2);
+                const centerVecY = (arenaRect.height / 2) - (posY + blobSize / 2);
+                const angle = Math.atan2(-centerVecY, -centerVecX);
+                const offset = Math.min(5, Math.hypot(centerVecX, centerVecY) / 50);
+                
+                pupils.forEach(pupil => {
+                    pupil.style.transform = `translate(${Math.cos(angle) * offset}px, ${Math.sin(angle) * offset}px)`;
+                });
+                return;
+            }
+
+            activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+
+            if (isDragging && activePointers.size === 1) {
+                const localX = e.clientX - arenaRect.left - blobSize / 2;
+                const localY = e.clientY - arenaRect.top - blobSize / 2;
+
+                velX = localX - lastMouseX;
+                velY = localY - lastMouseY;
+                lastMouseX = localX;
+                lastMouseY = localY;
+
+                posX = Math.max(0, Math.min(arenaRect.width - blobSize - 4, localX));
+                posY = Math.max(0, Math.min(arenaRect.height - blobSize - 4, localY));
+
+                blob.style.left = `${posX}px`;
+                blob.style.top = `${posY}px`;
+
+                const speed = Math.hypot(velX, velY);
+                if (speed > 5) {
+                    blob.classList.add('dizzy');
+                    const stretch = Math.min(1.2, 1 + speed * 0.005);
+                    const squeeze = 1 / stretch;
+                    const tilt = Math.atan2(velY, velX) * (180 / Math.PI);
+                    blob.style.transform = `rotate(${tilt}deg) scale(${stretch}, ${squeeze})`;
+                }
+            } 
+            else if (isStretching && activePointers.size === 2) {
+                const points = Array.from(activePointers.values());
+                const currentDistance = Math.hypot(points[0].x - points[1].x, points[0].y - points[1].y);
+                
+                const scaleFactorX = currentDistance / initialTouchDistance;
+                const scaleFactorY = 1 / Math.max(0.5, scaleFactorX); 
+                
+                const dx = points[0].x - points[1].x;
+                const dy = points[0].y - points[1].y;
+                const angleRad = Math.atan2(dy, dx);
+                const angleDeg = angleRad * (180 / Math.PI);
+
+                blob.style.transform = `scale(${Math.min(1.6, scaleFactorX)}, ${Math.max(0.4, scaleFactorY)}) rotate(${angleDeg}deg)`;
+                face.style.transform = `scale(${Math.min(1.5, 1 / scaleFactorX)}, 1) rotate(${-angleDeg}deg)`;
+            }
+        });
+
+Use code with caution.
+const endPointerHandler = (e) => {
+activePointers.delete(e.pointerId);
+if (activePointers.size === 0) {
+isDragging = false;
+isStretching = false;
+blob.classList.remove('distorted', 'dizzy');
+blob.style.transform = '';
+face.style.transform = '';
+} else if (activePointers.size === 1) {
+isStretching = false;
+blob.classList.remove('distorted');
+const remainingId = Array.from(activePointers.keys())[0];
+const pt = activePointers.get(remainingId);
+lastMouseX = pt.x - arenaRect.left - blobSize / 2;
+lastMouseY = pt.y - arenaRect.top - blobSize / 2;
+isDragging = true;
+}
+};
+blob.addEventListener('pointerup', endPointerHandler);
+blob.addEventListener('pointercancel', endPointerHandler);
+function updatePhysics() {
+if (!isDragging && !isStretching) {
+velY += gravity;
+velX *= friction;
+velY *= friction;
+posX += velX;
+posY += velY;
+const maxX = arenaRect.width - blobSize - 4;
+const maxY = arenaRect.height - blobSize - 4;
+let hitWall = false;
+let impactForce = 0;
+if (posX < 0) { posX = 0; impactForce = Math.abs(velX); velX = -velX * bounce; hitWall = true; }
+else if (posX > maxX) { posX = maxX; impactForce = Math.abs(velX); velX = -velX * bounce; hitWall = true; }
+if (posY < 0) { posY = 0; impactForce = Math.abs(velY); velY = -velY * bounce; hitWall = true; }
+else if (posY > maxY) {
+posY = maxY;
+impactForce = Math.abs(velY);
+if (Math.abs(velY) < 1.5) velY = 0;
+velX *= 0.95;
+velY = -velY * bounce;
+if (Math.abs(velY) > 1.5) hitWall = true;
+}
+if (hitWall && impactForce > 6) {
+angerLevel = Math.min(1, angerLevel + (impactForce * 0.08));
+}
+blob.style.left = ${posX}px;
+blob.style.top = ${posY}px;
+}
+if (angerLevel > 0) {
+angerLevel -= angerDecay;
+if (angerLevel < 0) angerLevel = 0;
+}
+if (!isStretching) {
+if (angerLevel > 0.3) {
+blob.classList.add('angry');
+const redVal = 255;
+const greenVal = Math.floor(94 - (94 * angerLevel));
+const blueVal = Math.floor(151 - (151 * angerLevel));
+blob.style.background = rgb(${redVal}, ${greenVal}, ${blueVal});
+} else {
+blob.classList.remove('angry');
+blob.style.background = '';
+}
+} else {
+blob.classList.remove('angry');
+blob.style.background = '';
+}
+requestAnimationFrame(updatePhysics);
+}
+requestAnimationFrame(updatePhysics);
