@@ -1,0 +1,805 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Cyber Bot Arena: Ultimate Edition</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            user-select: none;
+            -webkit-user-select: none;
+            margin: 0;
+            padding: 0;
+        }
+        body, html {
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background-color: #020306;
+            font-family: 'Courier New', Courier, monospace;
+        }
+        #gameCanvas {
+            display: block;
+            width: 100vw;
+            height: 100vh;
+        }
+        #ui-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+        }
+        .hud-element {
+            position: absolute;
+            color: #00ffff;
+            font-weight: bold;
+            font-size: 14px;
+            text-shadow: 0 0 10px rgba(0, 255, 255, 0.8);
+        }
+        #score-display {
+            top: 25px;
+            left: 25px;
+            background: rgba(0, 255, 255, 0.08);
+            padding: 10px 20px;
+            border: 1px dashed #00ffff;
+            border-radius: 4px;
+            line-height: 1.6;
+        }
+        #chat-log {
+            bottom: 150px;
+            left: 25px;
+            width: 260px;
+            height: 110px;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-end;
+            font-size: 11px;
+            color: #00ffaa;
+            opacity: 0.85;
+        }
+        .chat-msg {
+            margin-top: 4px;
+            animation: fadeIn 0.2s ease-out;
+        }
+        #health-container {
+            top: 25px;
+            right: 25px;
+            width: 180px;
+            height: 22px;
+            background: rgba(0, 0, 0, 0.6);
+            border: 2px solid #00ffff;
+            box-shadow: 0 0 15px rgba(0, 255, 255, 0.4);
+            border-radius: 4px;
+            overflow: hidden;
+        }
+        #health-bar {
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, #00ffff 0%, #0077ff 100%);
+            box-shadow: 0 0 8px #00ffff;
+        }
+        #achievement-popup {
+            top: 15%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 24px;
+            color: #ffff00;
+            text-shadow: 0 0 20px #ffff00;
+            background: rgba(0,0,0,0.8);
+            padding: 15px 30px;
+            border: 2px solid #ffff00;
+            border-radius: 8px;
+            display: none;
+            z-index: 100;
+            text-align: center;
+        }
+        #audio-hint {
+            bottom: 25px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 12px;
+            letter-spacing: 1px;
+            color: rgba(0, 255, 255, 0.6);
+            animation: pulse 1.5s infinite alternate;
+        }
+        #game-over-screen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(2, 3, 6, 0.95);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 10;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.4s ease;
+        }
+        #game-over-screen.active {
+            opacity: 1;
+            pointer-events: auto;
+        }
+        #game-over-screen h1 {
+            color: #ff0055;
+            font-size: 40px;
+            margin-bottom: 12px;
+            text-shadow: 0 0 20px #ff0055;
+            letter-spacing: 3px;
+        }
+        #game-over-screen p {
+            color: #ffffff;
+            font-size: 18px;
+            margin-bottom: 30px;
+        }
+        .btn {
+            padding: 14px 36px;
+            font-family: inherit;
+            font-size: 16px;
+            font-weight: bold;
+            color: #020306;
+            background: #00ffff;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            box-shadow: 0 0 20px rgba(0, 255, 255, 0.6);
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(3px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes pulse {
+            from { opacity: 0.3; }
+            to { opacity: 0.9; }
+        }
+    </style>
+</head>
+<body>
+    <canvas id="gameCanvas"></canvas>
+    <div id="ui-layer">
+        <div id="score-display" class="hud-element">
+            ARENA POINTS: <span id="val-score">0</span><br>
+            BOTS KILLED: <span id="val-kills">0</span><br>
+            WEAPON: <span id="val-weapon" style="color:#ffff00">RAILGUN</span>
+        </div>
+        <div id="achievement-popup" class="hud-element">ACHIEVEMENT UNLOCKED!</div>
+        <div id="chat-log" class="hud-element"></div>
+        <div id="health-container" class="hud-element">
+            <div id="health-bar"></div>
+        </div>
+        <div id="audio-hint" class="hud-element">&gt; TAP SCREEN TO LINK AUDIO DRIVERS &lt;</div>
+    </div>
+    <div id="game-over-screen">
+        <h1>LINK TERMINATED</h1>
+        <p id="final-score">FINAL SCORE: 0</p>
+        <button class="btn" id="restart-btn">RE-ENTER MATRIX</button>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const valScore = document.getElementById('val-score');
+        const valKills = document.getElementById('val-kills');
+        const valWeapon = document.getElementById('val-weapon');
+        const chatLog = document.getElementById('chat-log');
+        const healthBar = document.getElementById('health-bar');
+        const achievementPopup = document.getElementById('achievement-popup');
+        const gameOverScreen = document.getElementById('game-over-screen');
+        const finalScoreText = document.getElementById('final-score');
+        const restartBtn = document.getElementById('restart-btn');
+        const audioHint = document.getElementById('audio-hint');
+
+        let audioCtx = null;
+        let gameState = 'playing';
+        let score = 0;
+        let killCount = 0;
+        let currentWeaponType = 'RAILGUN';
+        let scaleMultiplier = 1;
+
+        const mapWidth = 3000;
+        const mapHeight = 3000;
+        let camera = { x: 0, y: 0 };
+        let player;
+        let structures = [];
+        let roads = [];
+
+        let bullets = [];
+        let enemies = [];
+        let allies = [];
+        let medkits = [];
+        let particles = [];
+
+        let pulseTimer = 0;
+        let lastTime = performance.now();
+        let keys = {};
+        let mouseX = 0, mouseY = 0, isMouseDown = false;
+
+        let leftJoystick = { x: 0, y: 0, active: false, startX: 0, startY: 0, currentX: 0, currentY: 0, pointerId: null };
+        let rightJoystick = { x: 0, y: 0, active: false, startX: 0, startY: 0, currentX: 0, currentY: 0, pointerId: null };
+        let joystickRadius = 60;
+
+        let lastSpawnTime = 0;
+        let lastMedkitTime = 0;
+
+        const botNames = ['Z3RO_K00L', 'AC1D_BURN', 'CRASH_0V3RR1D3', 'PHANT0M', 'N3XUS', 'GL1TCH'];
+        const chatPhrases = ['Guarding the Neon Avenues!', 'Low on power! Requesting health!', 'Enemy Heavy Mech spotted!', 'Target neutralized.', 'Flank them around the sector blocks!'];
+
+        const cellSize = 150;
+        let spatialGrid = {};
+
+        function initAudio() {
+            if (!audioCtx) {
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                audioHint.style.display = 'none';
+            }
+        }
+
+        function playLaserSound(type) {
+            if (!audioCtx) return;
+            let osc = audioCtx.createOscillator(), gain = audioCtx.createGain();
+            osc.type = type === 'LASER' ? 'sine' : 'sawtooth';
+            let freq = type === 'SPREAD' ? 600 : (type === 'DUAL' ? 800 : 900);
+            osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+            osc.frequency.exponentialRampToValueAtTime(150, audioCtx.currentTime + 0.08);
+            gain.gain.setValueAtTime(0.08, audioCtx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.08);
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+            osc.start();
+            osc.stop(audioCtx.currentTime + 0.08);
+        }
+
+        function playExplodeSound() {
+            if (!audioCtx) return;
+            let osc = audioCtx.createOscillator(), gain = audioCtx.createGain();
+            osc.type = 'triangle';
+            osc.frequency.setValueAtTime(120, audioCtx.currentTime);
+            osc.frequency.linearRampToValueAtTime(20, audioCtx.currentTime + 0.2);
+            gain.gain.setValueAtTime(0.2, audioCtx.currentTime);
+            gain.gain.linearRampToValueAtTime(0.001, audioCtx.currentTime + 0.2);
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+            osc.start();
+            osc.stop(audioCtx.currentTime + 0.2);
+        }
+
+        function playAchievementSound() {
+            if (!audioCtx) return;
+            const now = audioCtx.currentTime;
+            const notes = [523.25, 659.25, 783.99, 1046.50];
+            notes.forEach((freq, i) => {
+                let osc = audioCtx.createOscillator(), gain = audioCtx.createGain();
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(freq, now + i * 0.08);
+                gain.gain.setValueAtTime(0.15, now + i * 0.08);
+Use code with caution.
+gain.gain.exponentialRampToValueAtTime(0.001, now + i * 0.08 + 0.15);
+osc.connect(gain);
+gain.connect(audioCtx.destination);
+osc.start(now + i * 0.08);
+osc.stop(now + i * 0.08 + 0.15);
+});
+}
+function playHealSound() {
+if (!audioCtx) return;
+let osc = audioCtx.createOscillator(), gain = audioCtx.createGain();
+osc.type = 'sine';
+osc.frequency.setValueAtTime(440, audioCtx.currentTime);
+osc.frequency.exponentialRampToValueAtTime(880, audioCtx.currentTime + 0.2);
+gain.gain.setValueAtTime(0.12, audioCtx.currentTime);
+gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.2);
+osc.connect(gain);
+gain.connect(audioCtx.destination);
+osc.start();
+osc.stop(audioCtx.currentTime + 0.2);
+}
+function addChatMessage(sender, msg) {
+const div = document.createElement('div');
+div.className = 'chat-msg';
+div.innerHTML = <span style="color:#00ffff;">[${sender}]:</span> ${msg};
+chatLog.appendChild(div);
+if(chatLog.childNodes.length > 4) chatLog.removeChild(chatLog.firstChild);
+}
+function checkAchievements(kills) {
+if (kills > 0 && kills % 100 === 0 && kills <= 500) {
+playAchievementSound();
+achievementPopup.innerText = ACHIEVEMENT: ${kills} BOTS PURGED!;
+achievementPopup.style.display = 'block';
+setTimeout(() => {
+achievementPopup.style.display = 'none';
+}, 2500);
+addChatMessage('SYSTEM', Glory unlocked: Cleared tier event boundary at ${kills} units.);
+}
+}
+function buildMap() {
+roads = [
+{ x: 0, y: 400, w: 3000, h: 250 },
+{ x: 0, y: 1350, w: 3000, h: 300 },
+{ x: 0, y: 2350, w: 3000, h: 250 },
+{ x: 400, y: 0, w: 250, h: 3000 },
+{ x: 1350, y: 0, w: 300, h: 3000 },
+{ x: 2350, y: 0, w: 250, h: 3000 }
+];
+structures = [
+{ x: 50, y: 50, w: 300, h: 300, label: "COMM HUB 01" },
+{ x: 700, y: 50, w: 250, h: 300, label: "SERVERS W1" },
+{ x: 1000, y: 50, w: 300, h: 300, label: "SERVERS W2" },
+{ x: 1700, y: 50, w: 600, h: 300, label: "MEGA CORP LABS" },
+{ x: 50, y: 700, w: 300, h: 600, label: "HABITATION 0A" },
+{ x: 700, y: 700, w: 600, h: 250, label: "LOGISTICS E1" },
+{ x: 700, y: 1000, w: 600, h: 300, label: "DATA SEC C" },
+{ x: 1700, y: 700, w: 600, h: 600, label: "THE MAIN FRAME CORE" },
+{ x: 50, y: 1700, w: 300, h: 600, label: "ENERGY ARRAY" },
+{ x: 700, y: 1700, w: 600, h: 600, label: "MANUFACTURING WING" },
+{ x: 1700, y: 1700, w: 250, h: 600, label: "DEPOT A" },
+{ x: 2000, y: 1700, w: 350, h: 600, label: "DEPOT B" },
+{ x: 50, y: 2650, w: 300, h: 300, label: "OUTPOST S1" },
+{ x: 700, y: 2650, w: 1600, h: 300, label: "PRIMARY STAGING RUNWAY" },
+{ x: 2650, y: 2650, w: 300, h: 300, label: "OUTPOST S2" }
+];
+}
+function checkWallCollision(x, y, radius) {
+for (let i = 0; i < structures.length; i++) {
+let b = structures[i];
+let closestX = Math.max(b.x, Math.min(x, b.x + b.w));
+let closestY = Math.max(b.y, Math.min(y, b.y + b.h));
+if (((x - closestX)**2 + (y - closestY)2) < radius2) return true;
+}
+return false;
+}
+function drawHealthBar(x, y, radius, current, max) {
+let barW = radius * 2.5;
+let barH = 5 * scaleMultiplier;
+let bx = x - barW / 2;
+let by = y - radius - 14;
+ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+ctx.fillRect(bx, by, barW, barH);
+ctx.fillStyle = current / max > 0.35 ? '#00ffaa' : '#ff0055';
+ctx.fillRect(bx, by, barW * (current / max), barH);
+ctx.strokeStyle = 'rgba(0,255,255,0.2)';
+ctx.strokeRect(bx, by, barW, barH);
+}
+function updateWeaponTier() {
+if (score > 800) currentWeaponType = 'LASER';
+else if (score > 400) currentWeaponType = 'SPREAD';
+else if (score > 150) currentWeaponType = 'DUAL';
+else currentWeaponType = 'RAILGUN';
+valWeapon.innerText = currentWeaponType;
+}
+function initCanvas() {
+canvas.width = window.innerWidth;
+canvas.height = window.innerHeight;
+scaleMultiplier = Math.min(canvas.width, canvas.height) / 800;
+if(scaleMultiplier < 0.6) scaleMultiplier = 0.6;
+joystickRadius = 55 * scaleMultiplier;
+leftJoystick.x = 80 * scaleMultiplier + joystickRadius;
+leftJoystick.y = canvas.height - (80 * scaleMultiplier + joystickRadius);
+rightJoystick.x = canvas.width - (80 * scaleMultiplier + joystickRadius);
+rightJoystick.y = canvas.height - (80 * scaleMultiplier + joystickRadius);
+}
+class Player {
+constructor() {
+this.x = 525;
+this.y = 525;
+this.radius = 18 * scaleMultiplier;
+this.speed = 4.5 * scaleMultiplier;
+this.angle = 0;
+this.maxHealth = 100;
+this.health = 100;
+this.fireCooldown = 0;
+this.fireRate = 10;
+}
+update(dt) {
+let moveX = 0, moveY = 0;
+if (keys['w'] || keys['ArrowUp']) moveY -= 1;
+if (keys['s'] || keys['ArrowDown']) moveY += 1;
+if (keys['a'] || keys['Left']) moveX -= 1;
+if (keys['d'] || keys['Right']) moveX += 1;
+if (leftJoystick.active) {
+let dx = leftJoystick.currentX - leftJoystick.startX, dy = leftJoystick.currentY - leftJoystick.startY;
+let d = Math.hypot(dx, dy);
+if (d > 0) {
+moveX = (dx / d) * Math.min(d, joystickRadius) / joystickRadius;
+moveY = (dy / d) * Math.min(d, joystickRadius) / joystickRadius;
+}
+}
+let curSpeed = this.speed * dt;
+if (moveX !== 0) {
+let nX = this.x + moveX * curSpeed;
+if (nX >= this.radius && nX <= mapWidth - this.radius && !checkWallCollision(nX, this.y, this.radius)) this.x = nX;
+}
+if (moveY !== 0) {
+let nY = this.y + moveY * curSpeed;
+if (nY >= this.radius && nY <= mapHeight - this.radius && !checkWallCollision(this.x, nY, this.radius)) this.y = nY;
+}
+if (rightJoystick.active) {
+let rdx = rightJoystick.currentX - rightJoystick.startX, rdy = rightJoystick.currentY - rightJoystick.startY;
+if (Math.hypot(rdx, rdy) > 10) {
+this.angle = Math.atan2(rdy, rdx);
+if (this.fireCooldown <= 0) {
+this.fire();
+this.fireCooldown = this.fireRate;
+}
+}
+} else if (isMouseDown) {
+this.angle = Math.atan2((mouseY + camera.y) - this.y, (mouseX + camera.x) - this.x);
+if (this.fireCooldown <= 0) {
+this.fire();
+this.fireCooldown = this.fireRate;
+}
+}
+if (this.fireCooldown > 0) this.fireCooldown -= dt;
+}
+fire() {
+playLaserSound(currentWeaponType);
+if (currentWeaponType === 'RAILGUN') {
+bullets.push(new Bullet(this.x, this.y, this.angle, true));
+} else if (currentWeaponType === 'DUAL') {
+let pX = Math.cos(this.angle + Math.PI/2) * 8;
+let pY = Math.sin(this.angle + Math.PI/2) * 8;
+bullets.push(new Bullet(this.x + pX, this.y + pY, this.angle, true));
+bullets.push(new Bullet(this.x - pX, this.y - pY, this.angle, true));
+} else if (currentWeaponType === 'SPREAD') {
+bullets.push(new Bullet(this.x, this.y, this.angle, true));
+bullets.push(new Bullet(this.x, this.y, this.angle - 0.2, true));
+bullets.push(new Bullet(this.x, this.y, this.angle + 0.2, true));
+} else if (currentWeaponType === 'LASER') {
+this.fireRate = 4;
+bullets.push(new Bullet(this.x, this.y, this.angle + (Math.random() - 0.5) * 0.05, true));
+}
+}
+draw() {
+ctx.save();
+ctx.translate(this.x - camera.x, this.y - camera.y);
+ctx.rotate(this.angle);
+ctx.fillStyle = '#00aaff';
+ctx.fillRect(0, -this.radius0.7, this.radius1.4, this.radius0.3);
+ctx.fillRect(0, this.radius0.4, this.radius1.4, this.radius0.3);
+ctx.beginPath();
+ctx.arc(0, 0, this.radius, 0, Math.PI * 2);
+ctx.strokeStyle = '#00ffff';
+ctx.lineWidth = 3;
+ctx.shadowBlur = 12;
+ctx.shadowColor = '#00ffff';
+ctx.stroke();
+ctx.fillStyle = '#0a1d30';
+ctx.fill();
+ctx.beginPath();
+ctx.moveTo(0,0);
+ctx.lineTo(-this.radius0.5, -this.radius0.3);
+ctx.lineTo(-this.radius0.5, this.radius0.3);
+ctx.closePath();
+ctx.fillStyle = '#00ffff';
+ctx.fill();
+ctx.restore();
+drawHealthBar(this.x - camera.x, this.y - camera.y, this.radius, this.health, this.maxHealth);
+}
+damage(amt) {
+this.health -= amt;
+if (this.health <= 0) {
+this.health = 0;
+endGame();
+}
+healthBar.style.width = ${(this.health / this.maxHealth) * 100}%;
+}
+}
+class SimulatedAlly {
+constructor(x, y, name) {
+this.x = x;
+this.y = y;
+this.name = name;
+this.radius = 17 * scaleMultiplier;
+this.speed = 2.6 * scaleMultiplier;
+this.health = 100;
+this.maxHealth = 100;
+this.angle = 0;
+this.cooldown = 0;
+}
+update(dt) {
+let target = null, minDist = 450;
+for (let i = 0; i < enemies.length; i++) {
+let e = enemies[i];
+let d = Math.hypot(e.x - this.x, e.y - this.y);
+if (d < minDist) { minDist = d; target = e; }
+}
+if (target) {
+this.angle = Math.atan2(target.y - this.y, target.x - this.x);
+if (minDist > 140) {
+let nX = this.x + Math.cos(this.angle) * this.speed * dt, nY = this.y + Math.sin(this.angle) * this.speed * dt;
+if (!checkWallCollision(nX, this.y, this.radius)) this.x = nX;
+if (!checkWallCollision(this.x, nY, this.radius)) this.y = nY;
+}
+if (this.cooldown <= 0) {
+bullets.push(new Bullet(this.x, this.y, this.angle, false));
+this.cooldown = 18 + Math.random()10;
+}
+} else {
+this.angle += (Math.random() - 0.5) * 0.2 * dt;
+let nX = this.x + Math.cos(this.angle) * (this.speed0.6) * dt, nY = this.y + Math.sin(this.angle) * (this.speed0.6) * dt;
+if (nX > 50 && nX < mapWidth - 50 && !checkWallCollision(nX, this.y, this.radius)) this.x = nX;
+if (nY > 50 && nY < mapHeight - 50 && !checkWallCollision(this.x, nY, this.radius)) this.y = nY;
+}
+if(this.cooldown > 0) this.cooldown -= dt;
+if (Math.random() < 0.0007 * dt) addChatMessage(this.name, chatPhrases[Math.floor(Math.random()chatPhrases.length)]);
+}
+draw() {
+ctx.save();
+ctx.translate(this.x - camera.x, this.y - camera.y);
+ctx.rotate(this.angle);
+ctx.fillStyle = '#0055ff';
+ctx.fillRect(-this.radius0.4, -this.radius1.1, this.radius0.5, this.radius2.2);
+ctx.beginPath();
+ctx.arc(0, 0, this.radius, 0, Math.PI * 2);
+ctx.strokeStyle = '#0088ff';
+ctx.lineWidth = 2.5;
+ctx.stroke();
+ctx.fillStyle = '#041124';
+ctx.fill();
+ctx.restore();
+ctx.fillStyle = '#00ffaa';
+ctx.font = 'bold 11px monospace';
+ctx.textAlign = 'center';
+ctx.fillText(this.name, this.x - camera.x, this.y - camera.y - this.radius - 22);
+drawHealthBar(this.x - camera.x, this.y - camera.y, this.radius, this.health, this.maxHealth);
+}
+damage(amt) {
+this.health -= amt;
+}
+}
+class Enemy {
+constructor(x, y, type) {
+this.x = x;
+this.y = y;
+this.type = type;
+this.markedForRemoval = false;
+if (type === 'tank') {
+this.radius = 26 * scaleMultiplier;
+this.speed = 1.3 * scaleMultiplier;
+this.health = this.maxHealth = 6;
+this.color = '#bd00ff';
+this.pts = 50;
+} else {
+this.radius = 16 * scaleMultiplier;
+this.speed = 2.3 * scaleMultiplier;
+this.health = this.maxHealth = 2;
+this.color = '#ff0055';
+this.pts = 15;
+}
+}
+update(dt) {
+let targets = [player, ...allies];
+let closest = player, minDist = 9999;
+for(let i=0; i<targets.length; i++) {
+let t = targets[i];
+let d = Math.hypot(t.x - this.x, t.y - this.y);
+if(d < minDist) { minDist = d; closest = t; }
+}
+let angle = Math.atan2(closest.y - this.y, closest.x - this.x);
+let nX = this.x + Math.cos(angle) * this.speed * dt, nY = this.y + Math.sin(angle) * this.speed * dt;
+if (!checkWallCollision(nX, this.y, this.radius)) this.x = nX;
+if (!checkWallCollision(this.x, nY, this.radius)) this.y = nY;
+if (minDist < this.radius + closest.radius) {
+closest.damage(this.type === 'tank' ? 20 : 12);
+this.markedForRemoval = true;
+playExplodeSound();
+createExplosion(this.x, this.y, this.color, 10);
+}
+}
+draw() {
+ctx.save();
+ctx.translate(this.x - camera.x, this.y - camera.y);
+ctx.shadowBlur = 10;
+ctx.shadowColor = this.color;
+ctx.beginPath();
+let sides = this.type === 'tank' ? 6 : 3;
+for(let i=0; i<sides; i++) {
+let a = (i * Math.PI * 2 / sides) + (pulseTimer * 0.02);
+let sx = Math.cos(a) * this.radius, sy = Math.sin(a) * this.radius;
+if(i === 0) ctx.moveTo(sx, sy);
+else ctx.lineTo(sx, sy);
+}
+ctx.closePath();
+ctx.strokeStyle = this.color;
+ctx.lineWidth = 3;
+ctx.stroke();
+ctx.fillStyle = '#1c0418';
+ctx.fill();
+ctx.beginPath();
+ctx.arc(0,0, this.radius0.3, 0, Math.PI2);
+ctx.fillStyle = this.color;
+ctx.fill();
+ctx.restore();
+drawHealthBar(this.x - camera.x, this.y - camera.y, this.radius, this.health, this.maxHealth);
+}
+hit(isPlayerBullet) {
+this.health--;
+if (this.health <= 0) {
+this.markedForRemoval = true;
+if(isPlayerBullet) {
+score += this.pts;
+killCount++;
+valScore.innerText = score;
+valKills.innerText = killCount;
+updateWeaponTier();
+checkAchievements(killCount);
+}
+playExplodeSound();
+createExplosion(this.x, this.y, this.color, 14);
+}
+}
+}
+class Bullet {
+constructor(x, y, angle, isPlayer) {
+this.x = x;
+this.y = y;
+this.isPlayer = isPlayer;
+this.vx = Math.cos(angle) * (14 * scaleMultiplier);
+this.vy = Math.sin(angle) * (14 * scaleMultiplier);
+this.radius = 4 * scaleMultiplier;
+this.markedForRemoval = false;
+}
+update(dt) {
+this.x += this.vx * dt;
+this.y += this.vy * dt;
+if (this.x < 0 || this.x > mapWidth || this.y < 0 || this.y > mapHeight || checkWallCollision(this.x, this.y, this.radius)) {
+this.markedForRemoval = true;
+}
+}
+draw() {
+ctx.save();
+ctx.beginPath();
+ctx.arc(this.x - camera.x, this.y - camera.y, this.radius, 0, Math.PI * 2);
+ctx.fillStyle = this.isPlayer ? '#ffffff' : '#00ffff';
+ctx.shadowBlur = 8;
+ctx.shadowColor = '#00ffff';
+ctx.fill();
+ctx.restore();
+}
+}
+class Medkit {
+constructor(x, y) {
+this.x = x;
+this.y = y;
+this.radius = 14 * scaleMultiplier;
+}
+draw() {
+let tx = this.x - camera.x, ty = this.y - camera.y;
+ctx.save();
+ctx.shadowBlur = 12;
+ctx.shadowColor = '#00ffaa';
+ctx.strokeStyle = 'rgba(0, 255, 170, 0.4)';
+ctx.lineWidth = 2;
+ctx.beginPath();
+ctx.arc(tx, ty, this.radius + 4 + Math.sin(pulseTimer0.1)3, 0, Math.PI2);
+ctx.stroke();
+ctx.fillStyle = '#061c12';
+ctx.strokeStyle = '#00ffaa';
+ctx.lineWidth = 2;
+ctx.fillRect(tx-this.radius, ty-this.radius, this.radius2, this.radius2);
+ctx.strokeRect(tx-this.radius, ty-this.radius, this.radius2, this.radius2);
+ctx.fillStyle = '#00ffaa';
+ctx.fillRect(tx - this.radius0.6, ty - this.radius0.2, this.radius1.2, this.radius0.4);
+ctx.fillRect(tx - this.radius0.2, ty - this.radius0.6, this.radius0.4, this.radius*1.2);
+ctx.restore();
+}
+}
+class Particle {
+constructor(x, y, color, vx, vy, life) {
+this.x = x;
+this.y = y;
+this.color = color;
+this.vx = vx;
+this.vy = vy;
+this.maxLife = this.life = life;
+}
+update(dt) {
+this.x += this.vx * dt;
+this.y += this.vy * dt;
+this.life -= dt;
+}
+draw() {
+ctx.save();
+ctx.beginPath();
+ctx.arc(this.x - camera.x, this.y - camera.y, 2.5 * scaleMultiplier, 0, Math.PI * 2);
+ctx.fillStyle = this.color;
+ctx.globalAlpha = Math.max(0, this.life / this.maxLife);
+ctx.fill();
+ctx.restore();
+}
+}
+function createExplosion(x, y, color, count) {
+for (let i = 0; i < count; i++) {
+let a = Math.random() * Math.PI * 2, s = (2 + Math.random() * 4) * scaleMultiplier;
+particles.push(new Particle(x, y, color, Math.cos(a)*s, Math.sin(a)*s, 25));
+}
+}
+function buildSpatialHashGrid() {
+spatialGrid = {};
+for (let i = 0; i < enemies.length; i++) {
+let e = enemies[i];
+let cellX = Math.floor(e.x / cellSize);
+let cellY = Math.floor(e.y / cellSize);
+let key = cellX + '_' + cellY;
+if (!spatialGrid[key]) spatialGrid[key] = [];
+spatialGrid[key].push(e);
+}
+}
+function updateFrame() {
+if (gameState !== 'playing') return;
+let now = performance.now();
+let dt = (now - lastTime) / 16.666;
+lastTime = now;
+if(dt > 4) dt = 4;
+pulseTimer++;
+ctx.fillStyle = '#070913';
+ctx.fillRect(0, 0, canvas.width, canvas.height);
+camera.x = Math.max(0, Math.min(mapWidth - canvas.width, player.x - canvas.width / 2));
+camera.y = Math.max(0, Math.min(mapHeight - canvas.height, player.y - canvas.height / 2));
+ctx.fillStyle = '#101424';
+for(let i=0; i<roads.length; i++) {
+ctx.fillRect(roads[i].x - camera.x, roads[i].y - camera.y, roads[i].w, roads[i].h);
+}
+ctx.strokeStyle = 'rgba(255, 255, 255, 0.06)';
+ctx.lineWidth = 4;
+for(let i=0; i<roads.length; i++) {
+let r = roads[i];
+ctx.beginPath();
+if (r.w > r.h) {
+ctx.moveTo(r.x - camera.x, (r.y + r.h/2) - camera.y);
+ctx.lineTo((r.x + r.w) - camera.x, (r.y + r.h/2) - camera.y);
+} else {
+ctx.moveTo((r.x + r.w/2) - camera.x, r.y - camera.y);
+ctx.lineTo((r.x + r.w/2) - camera.x, (r.y + r.h) - camera.y);
+}
+ctx.stroke();
+}
+ctx.strokeStyle = '#ff0055';
+ctx.lineWidth = 6;
+ctx.strokeRect(-camera.x, -camera.y, mapWidth, mapHeight);
+for(let i=0; i<structures.length; i++) {
+let b = structures[i];
+ctx.fillStyle = '#05070e';
+ctx.strokeStyle = '#00ffff';
+ctx.lineWidth = 3;
+ctx.fillRect(b.x - camera.x, b.y - camera.y, b.w, b.h);
+ctx.strokeRect(b.x - camera.x, b.y - camera.y, b.w, b.h);
+ctx.fillStyle = 'rgba(0, 255, 255, 0.4)';
+ctx.font = 'bold 12px monospace';
+ctx.textAlign='center';
+ctx.fillText(b.label, b.x + b.w/2 - camera.x, b.y + b.h/2 - camera.y);
+}
+if (now - lastSpawnTime > 1400) {
+lastSpawnTime = now;
+if(enemies.length < 25) {
+let targetRoad = roads[Math.floor(Math.random()*roads.length)];
+let rx = targetRoad.x + Math.random()*targetRoad.w;
+let ry = targetRoad.y + Math.random()*targetRoad.h;
+if(!checkWallCollision(rx, ry, 26)) enemies.push(new Enemy(rx, ry, Math.random() < 0.25 ? 'tank':'standard'));
+}
+}
+if (now - lastMedkitTime > 5000) {
+lastMedkitTime = now;
+if(medkits.length < 5) {
+let rx = Math.random()*mapWidth, ry = Math.random()*mapHeight;
+if(!checkWallCollision(rx, ry, 15)) medkits.push(new Medkit(rx, ry));
+}
+}
+player.update(dt);
+player.draw();
+for(let i=medkits.length-1; i>=0; i--) {
+let m = medkits[i];
+m.draw();
+if(Math.hypot(player.x - m.x, player.y - m.y) < player.radius + m.radius) {
+player.health = Math.min(player.maxHealth, player.health + 35);
+healthBar.style.width = ${player.health}%;
+playHealSound();
+medkits.splice(i, 1);
+}
+}
